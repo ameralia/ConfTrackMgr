@@ -2,11 +2,13 @@
 
 const dataElem = document.querySelector('#data');
 const enterBtn = document.querySelector('#btn');
+let parsedData,
+    summaryTime = 0;
 
 enterBtn.addEventListener('click', (e) => {
     e.stopPropagation;
     const userData = dataElem.value;
-    const parsedData = parseToObj(userData);
+    parsedData = parseToObj(userData);
     console.log(parsedData);
 });
 
@@ -26,6 +28,15 @@ function parseToObj(data) {
             title: line.slice(0, line.search(regex)),
             duration: parseInt(line.match(regex))
         });
+    });
+
+    result.forEach(elem => {
+        while (elem.title.indexOf(' ') == 0) {
+            elem.title = elem.title.slice(1);
+        }
+        while (elem.title.lastIndexOf(' ') == elem.title.length - 1) {
+            elem.title = elem.title.slice(0, elem.title.length - 1);
+        }
     });
 
     return result;
