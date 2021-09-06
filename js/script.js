@@ -3,13 +3,22 @@
 const dataElem = document.querySelector('#data');
 const enterBtn = document.querySelector('#btn');
 let parsedData,
-    summaryTime = 0;
+    summaryTime = 0,
+    tracks = 0;
+const MIN_TRACK_DURATION = 360,
+    MAX_TRACK_DURATION = 420;
 
 enterBtn.addEventListener('click', (e) => {
     e.stopPropagation;
     const userData = dataElem.value;
     parsedData = parseToObj(userData);
-    console.log(parsedData);
+
+    parsedData.forEach(speech => {
+        summaryTime += speech.duration;
+    });
+
+    tracks = countTracks(summaryTime, MIN_TRACK_DURATION, MAX_TRACK_DURATION);
+    console.log(summaryTime, tracks);
 });
 
 function parseToObj(data) {
@@ -18,7 +27,7 @@ function parseToObj(data) {
     const regex = /\d+/g;
     let result = [];
 
-    data = data.replace(replaceFrom, replaceTo);
+    data = data.replaceAll(replaceFrom, replaceTo);
     let lines = data.split('\n');
     lines = lines.filter(line => line != '');
 
@@ -41,3 +50,14 @@ function parseToObj(data) {
 
     return result;
 }
+
+function countTracks(sum, min, max) {
+    let res = 1;
+    if(sum / max > 1) {
+        res += Math.floor(sum / max);
+        if((sum % max) / min > 1)
+            res ++;
+    }
+    return res;
+}
+
