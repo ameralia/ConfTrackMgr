@@ -2,9 +2,13 @@
 
 const dataElem = document.querySelector('#data');
 const enterBtn = document.querySelector('#btn');
+const resultElem = document.querySelector('.result');
+const minSessionTime = 180,
+    maxSessionTime = 240;
 let parsedData,
     summaryTime = 0,
-    tracks = 0;
+    tracksNum = 0,
+    tracks = [];
 const MIN_TRACK_DURATION = 360,
     MAX_TRACK_DURATION = 420;
 
@@ -17,8 +21,22 @@ enterBtn.addEventListener('click', (e) => {
         summaryTime += speech.duration;
     });
 
-    tracks = countTracks(summaryTime, MIN_TRACK_DURATION, MAX_TRACK_DURATION);
-    console.log(summaryTime, tracks);
+    tracksNum = countTracks(summaryTime, MIN_TRACK_DURATION, MAX_TRACK_DURATION);
+
+    //distribute time into tracks
+    const talkes = parsedData.map(a => ({...a}));
+    tracks = getTracks(talkes, tracksNum);
+    //console.log(tracks);
+
+    //output result
+    const outputList = document.createElement('ul');
+    tracks?.forEach(track => {
+        const listItem = document.createElement('li');
+        listItem.textContent = `Session${track.sessionId}: ${track.startTime}: ${track.title}, duration: ${track.duration}`
+        outputList.append(listItem);
+    });
+        
+    resultElem.append(outputList);
 });
 
 function parseToObj(data) {
@@ -35,8 +53,10 @@ function parseToObj(data) {
         result.push({
             id: i,
             title: line.slice(0, line.search(regex)),
-            duration: parseInt(line.match(regex))
-        });
+            duration: parseInt(line.match(regex)),
+            sessionId: '',
+            startTime: 0
+        })
     });
 
     result.forEach(elem => {
@@ -59,5 +79,70 @@ function countTracks(sum, min, max) {
             res ++;
     }
     return res;
+}
+
+function getTracks(talkes, tracksNum) {
+    const sessionsNum = tracksNum * 2,
+        numIter = Math.pow(sessionsNum, talkes.length);
+        for(let i=0; i < numIter; i++) {
+            let x = i;
+            talkes.forEach(talk => {
+                talk.sessionId = x % sessionsNum;
+                    x = Math.floor(x / sessionsNum);     
+            }); 
+            if(checkTalkes(talkes, sessionsNum)){
+                return talkes;
+                //console.log(JSON.stringify(talkes));
+            }
+                
+        }
+}
+
+function checkTalkes(talkes, sessionsNum) {
+    //check if all sessionIds are not equal
+    let checkEqual = false;
+    for(let i = 0; i < talkes.length; i++) {
+        for(let j = 0; j < talkes.length; j++) {
+            if(talkes[i].sessionId != talkes[j].sessionId && (i != j)) {
+                checkEqual = true;
+            }
+        }
+        if(!checkEqual) {
+            return false;
+        }
+        checkEqual = false;
+    }
+    //check if summary duration of each session is not bigger than max
+    let durationSum = 0;
+    for(let i=0; i < sessionsNum; i++) {
+        talkes.forEach(talk => {
+            if(talk.sessionId == i) {
+                durationSum += talk.duration;
+                if(!(i % 2)) {
+                    if(durationSum > minSessionTime) {
+                        return false;
+                    }
+                } 
+                else {
+                    if(durationSum > maxSessionTime) {
+                        return false;
+                    }
+                }
+            }
+        });
+        if(!(i % 2)) {
+            if(durationSum != minSessionTime) {
+                return false;
+            }
+        } 
+        else {
+            if(durationSum < minSessionTime || durationSum > maxSessionTime) {
+                return false;
+            }
+        }
+        durationSum = 0;
+    }
+
+    return true;
 }
 
