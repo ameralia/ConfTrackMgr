@@ -4,18 +4,20 @@ const dataElem = document.querySelector('#data');
 const enterBtn = document.querySelector('#btn');
 const resultElem = document.querySelector('.result');
 const minSessionTime = 180,
-    maxSessionTime = 240;
-let parsedData,
-    summaryTime = 0,
-    tracksNum = 0,
-    tracks = [];
-const MIN_TRACK_DURATION = 360,
+    maxSessionTime = 240,
+    MIN_TRACK_DURATION = 360,
     MAX_TRACK_DURATION = 420;
 
 enterBtn.addEventListener('click', (e) => {
     e.stopPropagation;
     const userData = dataElem.value;
-    parsedData = parseToObj(userData);
+    const parsedData = parseToObj(userData);
+    let summaryTime = 0,
+         tracksNum = 0;
+         
+    parsedData.sort((a, b) => b.duration - a.duration);
+    //const parsedDataStr = JSON.stringify(parsedData);
+   //console.log(parsedDataStr);
 
     parsedData.forEach(speech => {
         summaryTime += speech.duration;
@@ -25,16 +27,21 @@ enterBtn.addEventListener('click', (e) => {
 
     //distribute time into tracks
     const talkes = parsedData.map(a => ({...a}));
-    tracks = getTracks(talkes, tracksNum);
-    //console.log(tracks);
+    const finalRes = getTracks(talkes, tracksNum);
 
     //output result
     const outputList = document.createElement('ul');
-    tracks?.forEach(track => {
-        const listItem = document.createElement('li');
-        listItem.textContent = `Session${track.sessionId}: ${track.startTime}: ${track.title}, duration: ${track.duration}`
-        outputList.append(listItem);
-    });
+    if(finalRes) {
+    talkes?.sort((a, b) => a.sessionId - b.sessionId);
+        talkes?.forEach(track => {
+            const listItem = document.createElement('li');
+            listItem.textContent = `Session${track.sessionId}: starts at ${track.startTime}min: ${track.title}, duration: ${track.duration}`
+            outputList.append(listItem);
+        });
+    }
+    else {
+        outputList.textContent = 'Error';
+    }
         
     resultElem.append(outputList);
 });
@@ -54,7 +61,7 @@ function parseToObj(data) {
             id: i,
             title: line.slice(0, line.search(regex)),
             duration: parseInt(line.match(regex)),
-            sessionId: '',
+            sessionId: null,
             startTime: 0
         })
     });
@@ -83,66 +90,83 @@ function countTracks(sum, min, max) {
 
 function getTracks(talkes, tracksNum) {
     const sessionsNum = tracksNum * 2,
-        numIter = Math.pow(sessionsNum, talkes.length);
-        for(let i=0; i < numIter; i++) {
-            let x = i;
-            talkes.forEach(talk => {
-                talk.sessionId = x % sessionsNum;
-                    x = Math.floor(x / sessionsNum);     
-            }); 
-            if(checkTalkes(talkes, sessionsNum)){
-                return talkes;
-                //console.log(JSON.stringify(talkes));
-            }
-                
-        }
+        count = Math.floor(talkes.length / sessionsNum),
+        startIndex = 0,
+        durationSums = [];
+    for(let i=0; i< sessionsNum; i++) {
+        durationSums[i] = 0;
+    }
+    const finalRes = getTalkesPart(talkes, startIndex, count, durationSums);
+    console.log(finalRes ? JSON.stringify(talkes) : "Nope.");
+    return finalRes;
 }
 
-function checkTalkes(talkes, sessionsNum) {
-    //check if all sessionIds are not equal
-    let checkEqual = false;
-    for(let i = 0; i < talkes.length; i++) {
-        for(let j = 0; j < talkes.length; j++) {
-            if(talkes[i].sessionId != talkes[j].sessionId && (i != j)) {
-                checkEqual = true;
+function getTalkesPart(talkes, startIndex, count, durationSums) {
+    const sessionsNum = durationSums.length;
+    const numIter = Math.pow(sessionsNum, count);
+    for (let i = 0; i < numIter; i++) {
+        let x = i;
+        for(let j = startIndex; j < startIndex + count; j++) {
+            const rem = x % sessionsNum;
+            talkes[j].sessionId = rem;
+            x = Math.round((x - rem) / sessionsNum);
+        }
+        const curDurationSums = checkTalkes(talkes, startIndex, count, durationSums);
+        if (curDurationSums) {
+            console.log(`startIndex: ${startIndex}, count: ${count}, curDurationSums: ${curDurationSums}.`);
+
+            if (startIndex + count === talkes.length) {
+                return true;
+            }
+
+            const newStartIndex = startIndex + count;
+            const newCount = ((talkes.length - newStartIndex) < count)
+                ? talkes.length - newStartIndex
+                : count;
+            if (getTalkesPart(talkes, newStartIndex, newCount, curDurationSums)) {
+                return true;
             }
         }
-        if(!checkEqual) {
-            return false;
-        }
-        checkEqual = false;
     }
-    //check if summary duration of each session is not bigger than max
-    let durationSum = 0;
+    return false;
+}
+
+function checkTalkes(talkes, startIndex, count, durationSums) {
+    const curDurationSums = [...durationSums],
+        sessionsNum = durationSums.length;
     for(let i=0; i < sessionsNum; i++) {
-        talkes.forEach(talk => {
-            if(talk.sessionId == i) {
-                durationSum += talk.duration;
-                if(!(i % 2)) {
+        let durationSum = curDurationSums[i];
+        for(let j = startIndex; j < startIndex + count; j++) {
+            if(talkes[j].sessionId == i) {
+                talkes[j].startTime = durationSum;
+                durationSum += talkes[j].duration;
+                if (!(i % 2)) {
                     if(durationSum > minSessionTime) {
-                        return false;
+                        return null;
                     }
-                } 
+                }
                 else {
                     if(durationSum > maxSessionTime) {
-                        return false;
+                        return null;
                     }
                 }
             }
-        });
-        if(!(i % 2)) {
-            if(durationSum != minSessionTime) {
-                return false;
+        }
+        curDurationSums[i] = durationSum;
+        if(startIndex === talkes.length - count) {
+            //console.log(`curDurationSums: ${curDurationSums}, talkes: ${talkes.map(t => t.sessionId)}.`);
+            if(!(i % 2)) {
+                if(durationSum != minSessionTime) {
+                    return null;
+                }
             }
-        } 
-        else {
-            if(durationSum < minSessionTime || durationSum > maxSessionTime) {
-                return false;
+            else {
+                if(durationSum > maxSessionTime || durationSum < minSessionTime) {
+                    return null;
+                }
             }
         }
-        durationSum = 0;
     }
-
-    return true;
+    return curDurationSums;
 }
 
